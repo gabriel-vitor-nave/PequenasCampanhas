@@ -4,37 +4,37 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthPage } from './AuthPage'
 
-const mocks = vi.hoisted(() => ({ signInWithPassword: vi.fn(), signUp: vi.fn(), resetPasswordForEmail: vi.fn() }))
-vi.mock('../../lib/supabase', () => ({ backend: () => ({ auth: mocks }) }))
+const mocks = vi.hoisted(() => ({ authenticate: vi.fn() }))
+vi.mock('./service', () => ({ accountService: mocks }))
 vi.mock('./AuthProvider', () => ({ useAuth: () => ({ user: null, loading: false }) }))
-describe('authentication forms', () => {
+describe('username and password forms', () => {
   beforeEach(() => { vi.clearAllMocks() })
-  it('submits credentials to auth and shows a translated failure', async () => {
-    mocks.signInWithPassword.mockResolvedValue({ error: { code: 'invalid_credentials' } })
+  it('shows exactly username and password, with no email or recovery flow', () => {
+    render(<MemoryRouter initialEntries={['/entrar']}><AuthPage /></MemoryRouter>)
+    expect(screen.getByLabelText('Usuário')).toHaveAttribute('autocomplete', 'username')
+    expect(screen.getByLabelText('Senha')).toBeInTheDocument()
+    expect(document.querySelectorAll('form input')).toHaveLength(2)
+    expect(document.querySelector('input[type="email"]')).toBeNull()
+    expect(screen.queryByText(/Esqueci minha senha/)).toBeNull()
+  })
+  it('submits username/password and displays a translated credential failure', async () => {
+    mocks.authenticate.mockRejectedValue(new Error('invalid_credentials'))
     render(<MemoryRouter initialEntries={['/entrar']}><AuthPage /></MemoryRouter>)
     const user = userEvent.setup()
-    await user.type(screen.getByLabelText('E-mail'), 'user@example.com')
-    await user.type(screen.getByLabelText('Senha'), 'invalid-password')
-    await user.click(screen.getByRole('button', { name: /Entrar na plataforma/ }))
-    expect(mocks.signInWithPassword).toHaveBeenCalledWith({ email: 'user@example.com', password: 'invalid-password' })
-    expect(await screen.findByRole('alert')).toHaveTextContent('E-mail ou senha incorretos.')
+    await user.type(screen.getByLabelText('Usuário'), 'kbum')
+    await user.type(screen.getByLabelText('Senha'), 'incorrect-password')
+    await user.click(screen.getByRole('button', { name: 'Entrar' }))
+    expect(mocks.authenticate).toHaveBeenCalledWith('login', 'kbum', 'incorrect-password')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Usuário ou senha incorretos.')
   })
-  it('does not claim that an unknown recovery account exists', async () => {
-    mocks.resetPasswordForEmail.mockResolvedValue({ error: null })
-    render(<MemoryRouter initialEntries={['/recuperar-senha']}><AuthPage /></MemoryRouter>)
-    fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'unknown@example.com' } })
-    fireEvent.submit(screen.getByRole('button', { name: /Enviar link/ }).closest('form')!)
-    expect(await screen.findByRole('status')).toHaveTextContent('Se este e-mail possuir uma conta')
-    expect(mocks.resetPasswordForEmail).toHaveBeenCalledWith('unknown@example.com', { redirectTo: `${window.location.origin}/auth/nova-senha` })
-  })
-  it('includes display name and confirmation redirect on signup', async () => {
-    mocks.signUp.mockResolvedValue({ error: null })
+  it('registers with the same two fields and does not request confirmation', async () => {
+    mocks.authenticate.mockResolvedValue(undefined)
     render(<MemoryRouter initialEntries={['/cadastro']}><AuthPage /></MemoryRouter>)
-    fireEvent.change(screen.getByLabelText('Nome de exibição'), { target: { value: 'Minha Pessoa' } })
-    fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByLabelText('Usuário'), { target: { value: 'jogador' } })
     fireEvent.change(screen.getByLabelText('Senha'), { target: { value: 'a-strong-password' } })
-    fireEvent.submit(screen.getByRole('button', { name: /Criar conta/ }).closest('form')!)
-    await waitFor(() => expect(mocks.signUp).toHaveBeenCalledWith(expect.objectContaining({ options: { data: { display_name: 'Minha Pessoa' }, emailRedirectTo: `${window.location.origin}/auth/callback` } })))
-    expect(await screen.findByRole('status')).toHaveTextContent('confirmar o e-mail')
+    fireEvent.submit(screen.getByRole('button', { name: /Criar conta e entrar/ }).closest('form')!)
+    await waitFor(() => expect(mocks.authenticate).toHaveBeenCalledWith('register', 'jogador', 'a-strong-password'))
+    expect(document.querySelectorAll('form input')).toHaveLength(2)
+    expect(screen.queryByText(/confirme|caixa de entrada|e-mail/i)).toBeNull()
   })
 })

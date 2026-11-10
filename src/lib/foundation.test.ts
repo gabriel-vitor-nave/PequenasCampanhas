@@ -25,7 +25,7 @@ async function attempted(sql: string, params: unknown[] = []) {
 }
 async function invitePlayer() {
   await identity(gm)
-  return scalar<string>('select public.invite_player($1,$2)', [campaign, 'player@example.com'])
+  return scalar<string>('select public.invite_player_by_username($1,$2)', [campaign, 'jogador'])
 }
 async function joinPlayer() {
   const invitation = await invitePlayer()
@@ -37,10 +37,11 @@ describe('foundation migration and authorization', () => {
   beforeAll(async () => {
     db = new PGlite()
     await db.exec(`
-      create role anon nologin; create role authenticated nologin;
-      grant usage on schema public to anon, authenticated;
+      create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
+      grant usage on schema public to anon, authenticated, service_role;
       create schema auth;
-      create table auth.users(id uuid primary key, email text, email_confirmed_at timestamptz, raw_user_meta_data jsonb default '{}');
+      create table auth.users(id uuid primary key, email text, email_confirmed_at timestamptz, raw_user_meta_data jsonb default '{}', confirmation_token text,email_change text,email_change_token_new text,email_change_token_current text,encrypted_password text default 'test-existing-hash');
+      create table auth.identities(id uuid primary key,user_id uuid,provider text,identity_data jsonb);
       create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
       grant usage on schema auth to anon, authenticated;
       grant execute on function auth.uid() to anon, authenticated;
@@ -48,9 +49,13 @@ describe('foundation migration and authorization', () => {
     `)
     const migrations = new URL('../../supabase/migrations/', import.meta.url)
     for (const file of readdirSync(migrations).filter(file => file.endsWith('.sql')).sort()) {
+      if (file.endsWith('_username_password_accounts.sql')) {
+        await db.query("insert into auth.users(id,email,email_confirmed_at) values ($1,'gm@example.com',null),($2,'player@example.com',now()),($3,'stranger@example.com',now())", [gm, player, stranger])
+        await db.query("insert into auth.identities(id,user_id,provider,identity_data) values($1,$1,'email','{\"email\":\"gm@example.com\"}')",[gm])
+      }
       await db.exec(readFileSync(new URL(file, migrations), 'utf8'))
     }
-    await db.query("insert into auth.users(id,email,email_confirmed_at) values ($1,'gm@example.com',now()),($2,'player@example.com',now()),($3,'stranger@example.com',now())", [gm, player, stranger])
+    await db.query("update public.profiles set username=case id when $1 then 'mestre' when $2 then 'jogador' else 'visitante' end", [gm,player])
   }, 60_000)
   beforeEach(async () => {
     await db.exec('reset role; begin')
@@ -59,6 +64,22 @@ describe('foundation migration and authorization', () => {
   })
   afterEach(async () => { await db.exec('rollback; reset role') })
   afterAll(async () => { await db?.close() })
+  it('preserves existing credentials until the owner supplies their password', async () => {
+    await db.exec('reset role')
+    const result=await db.query<{id:string;email:string;encrypted_password:string;confirmed:boolean}>('select id,email,encrypted_password,email_confirmed_at is not null as confirmed from auth.users where id=$1',[gm])
+    expect(result.rows[0]).toEqual({id:gm,email:'gm@example.com',encrypted_password:'test-existing-hash',confirmed:false})
+    expect(await scalar("select identity_data->>'email' from auth.identities where user_id=$1",[gm])).toBe('gm@example.com')
+  })
+  it('keeps usernames immutable to clients and rate limits restricted to the server', async () => {
+    await expect(attempted("update public.profiles set username='stolen' where id=$1", [gm])).rejects.toThrow(/permission denied/)
+    await expect(attempted("select public.claim_auth_attempt('global:access',3,60)")).rejects.toThrow(/permission denied/)
+    await expect(attempted("select public.verify_legacy_password($1,'password')",[gm])).rejects.toThrow(/permission denied/)
+    await expect(attempted("select public.invite_player($1,'player@example.com')",[campaign])).rejects.toThrow(/permission denied/)
+    await expect(attempted("select public.invite_player_by_username($1,'missing-user')",[campaign])).rejects.toThrow('PC_USERNAME_NOT_FOUND')
+    await db.exec('reset role; set role service_role')
+    expect(await scalar("select public.claim_auth_attempt('test:bucket',1,60)")).toBe(true)
+    expect(await scalar("select public.claim_auth_attempt('test:bucket',1,60)")).toBe(false)
+  })
   it('creates campaign, master membership, profile and audit atomically', async () => {
     expect(await scalar('select role from public.campaign_members where campaign_id = $1', [campaign])).toBe('gm')
     expect(await scalar('select count(*)::int from public.activity_logs where campaign_id = $1', [campaign])).toBe(1)
@@ -97,7 +118,7 @@ describe('foundation migration and authorization', () => {
     expect((await db.query('update public.campaigns set name = $1 where id = $2 returning id', ['Intrusão', campaign])).rows).toHaveLength(0)
     expect((await db.query('delete from public.campaigns where id = $1 returning id', [campaign])).rows).toHaveLength(0)
     await expect(attempted("update public.campaign_members set role = 'gm' where campaign_id = $1", [campaign])).rejects.toThrow(/permission denied/)
-    await expect(attempted("select public.invite_player($1,'other@example.com')", [campaign])).rejects.toThrow('PC_FORBIDDEN')
+    await expect(attempted("select public.invite_player_by_username($1,'visitante')", [campaign])).rejects.toThrow('PC_FORBIDDEN')
     await expect(attempted('select public.update_member_permissions($1,$2,false,false)', [campaign, player])).rejects.toThrow('PC_FORBIDDEN')
     await expect(attempted('update public.campaigns set owner_id = $1 where id = $2', [player, campaign])).rejects.toThrow(/permission denied/)
   })
@@ -121,7 +142,7 @@ describe('foundation migration and authorization', () => {
     await expect(attempted('select public.respond_to_invite($1,true)', [invite])).rejects.toThrow('PC_INVITE_EXPIRED')
     await identity(gm)
     await db.query("update public.campaigns set status = 'archived' where id = $1", [campaign])
-    await expect(attempted("select public.invite_player($1,'new@example.com')", [campaign])).rejects.toThrow('PC_ARCHIVED')
+    await expect(attempted("select public.invite_player_by_username($1,'visitante')", [campaign])).rejects.toThrow('PC_ARCHIVED')
   })
   it('supports invite rejection and revocation without creating membership', async () => {
     const first = await invitePlayer()
@@ -141,7 +162,7 @@ describe('foundation migration and authorization', () => {
   })
   it('enforces uniqueness, database input limits and cascade cleanup', async () => {
     await invitePlayer()
-    await expect(attempted("select public.invite_player($1,'PLAYER@example.com')", [campaign])).rejects.toThrow(/duplicate key/)
+    await expect(attempted("select public.invite_player_by_username($1,'JOGADOR')", [campaign])).rejects.toThrow(/duplicate key/)
     await expect(attempted("select public.create_campaign('ab','')")).rejects.toThrow(/check constraint/)
     await db.query('delete from public.campaigns where id = $1', [campaign])
     expect(await scalar('select count(*)::int from public.campaign_invites where campaign_id = $1', [campaign])).toBe(0)

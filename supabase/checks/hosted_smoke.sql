@@ -8,10 +8,12 @@ insert into auth.users(id,email,email_confirmed_at,raw_user_meta_data)
 select current_setting('pc.gm')::uuid,'pc-'||current_setting('pc.gm')||'@example.invalid',now(),'{"display_name":"Mestre de teste"}'::jsonb
 union all select current_setting('pc.player')::uuid,'pc-'||current_setting('pc.player')||'@example.invalid',now(),'{"display_name":"Jogador de teste"}'::jsonb
 union all select current_setting('pc.outsider')::uuid,'pc-'||current_setting('pc.outsider')||'@example.invalid',now(),'{"display_name":"Visitante de teste"}'::jsonb;
+update public.profiles set username='pc_'||left(replace(id::text,'-',''),20)
+where id in(current_setting('pc.gm')::uuid,current_setting('pc.player')::uuid,current_setting('pc.outsider')::uuid);
 set local role authenticated;
 select set_config('request.jwt.claim.sub',current_setting('pc.gm'),true);
 select set_config('pc.campaign',public.create_campaign('Verificação automática','Transação revertida ao concluir')::text,true);
-select set_config('pc.invite',public.invite_player(current_setting('pc.campaign')::uuid,'pc-'||current_setting('pc.player')||'@example.invalid')::text,true);
+select set_config('pc.invite',public.invite_player_by_username(current_setting('pc.campaign')::uuid,'pc_'||left(replace(current_setting('pc.player'),'-',''),20))::text,true);
 do $$ begin
   if (select count(*) from public.campaign_members where campaign_id=current_setting('pc.campaign')::uuid and role='gm')<>1 then raise exception 'SMOKE: master membership'; end if;
 end $$;

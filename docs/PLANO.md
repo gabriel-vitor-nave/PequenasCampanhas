@@ -8,7 +8,7 @@ Repositório remoto vazio, sem commits ou arquivos, clonado na pasta fornecida. 
 
 1. Design system grafite/âmbar, navegação responsiva e estados acessíveis.
 2. Cliente Supabase tipado; configuração pública validada sem backend fictício.
-3. Cadastro, confirmação por e-mail, login, recuperação de senha e logout.
+3. Cadastro e login com somente usuário e senha, sessão imediata e logout. E-mail foi removido por instrução do usuário.
 4. Perfil, avatar por URL HTTPS e preferências persistidas no banco.
 5. Criar, consultar, editar, arquivar, reativar e excluir campanhas.
 6. Membros, convites vinculados ao e-mail, aceite/recusa/revogação e permissões de participante.
@@ -27,4 +27,4 @@ Não antecipar iluminação dinâmica. Não apresentar funções futuras como pr
 
 ## Dependências externas
 
-Projeto Supabase, URL pública e chave publicável, migrations aplicadas, configuração de confirmação e recuperação de e-mail, SMTP para produção e URLs de redirecionamento. Para publicação: projeto Vercel e as mesmas variáveis públicas. Nenhuma credencial administrativa é necessária no navegador. Validação integrada de autenticação e Realtime exige um projeto configurado ou Supabase CLI + Docker locais.
+Projeto Supabase já conectado, migrations aplicadas e função de acesso por usuário publicada. Não há dependência de e-mail, SMTP ou callbacks no fluxo atual. Credenciais administrativas permanecem somente no servidor. Para a migração futura à Vercel, manter as variáveis públicas e autorizar a nova origem no CORS da função. A mesa virtual e sua sincronização entram na Fase 2.

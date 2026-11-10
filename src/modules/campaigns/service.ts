@@ -39,8 +39,8 @@ export const campaignService = {
     if (error) throw error
     return data
   },
-  async invite(id: string, email: string) {
-    const { data, error } = await backend().rpc('invite_player', { p_campaign_id: id, p_email: email.trim().toLowerCase() })
+  async invite(id: string, username: string) {
+    const { data, error } = await backend().rpc('invite_player_by_username', { p_campaign_id: id, p_username: username.trim().toLowerCase() })
     if (error) throw error
     return data
   },

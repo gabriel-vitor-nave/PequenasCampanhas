@@ -3,7 +3,9 @@ import { expect, test } from '@playwright/test'
 test('connected application requires login without exposing campaigns', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByRole('heading', { name: 'Sua aventura continua.' })).toBeVisible()
-  await expect(page.getByRole('textbox', { name: 'E-mail' })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: 'Usuário' })).toBeVisible()
+  await expect(page.locator('form input')).toHaveCount(2)
+  await expect(page.locator('input[type="email"]')).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Criar campanha' })).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })

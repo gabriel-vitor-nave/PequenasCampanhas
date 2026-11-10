@@ -1,5 +1,7 @@
 # Entrega 01 — Fundação
 
+> Registro histórico. O fluxo inicial de e-mail foi substituído por usuário e senha a pedido do usuário. Consulte `ACESSO-POR-USUARIO.md` para a implementação atual.
+
 Data: 9 de novembro de 2026.
 
 ## Implementado

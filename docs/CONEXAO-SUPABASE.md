@@ -1,5 +1,7 @@
 # Backend conectado — 9 de novembro de 2026
 
+> Histórico da conexão inicial. O acesso foi posteriormente substituído por usuário e senha, sem e-mail, SMTP ou callbacks. O estado atual está em [Acesso por usuário](ACESSO-POR-USUARIO.md); as pendências de e-mail abaixo não se aplicam ao novo fluxo.
+
 ## Recursos aplicados
 
 - Organização selecionada pelo usuário: **Kbum**.

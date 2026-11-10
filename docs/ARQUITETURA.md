@@ -12,11 +12,11 @@ Após a revisão hospedada, as implementações privilegiadas foram movidas para
 
 | Entidade | Responsabilidade | Relações |
 | --- | --- | --- |
-| `auth.users` | Identidade, e-mail confirmado e sessão, gerenciados pelo Supabase | Um perfil por usuário |
-| `profiles` | Nome, URL HTTPS de avatar e preferências | `id → auth.users.id` |
+| `auth.users` | Identidade interna, hash de senha e sessão, gerenciados pelo Supabase | Um perfil por usuário |
+| `profiles` | Usuário imutável, nome, URL HTTPS de avatar e preferências | `id → auth.users.id` |
 | `campaigns` | Nome, descrição, sistema, estado e proprietário imutável | `owner_id → profiles.id` |
 | `campaign_members` | Participação, mestre/jogador e permissões iniciais | Chave `(campaign_id, user_id)` |
-| `campaign_invites` | Convite de jogador vinculado ao e-mail confirmado | Campanha, remetente, status e vencimento |
+| `campaign_invites` | Convite por nome de usuário vinculado ao ID da conta | Campanha, destinatário, remetente, status e vencimento |
 | `activity_logs` | Eventos de campanha/participantes | Campanha e ator |
 
 Excluir uma campanha remove membros, convites e atividades por cascata. O mestre proprietário não pode sair ou ser removido; nesta fase não existe transferência de propriedade nem promoção de outros mestres. Excluir a identidade proprietária administrativamente também exclui suas campanhas por cascata: essa operação requer recuperação/backup antes de ser executada e não está disponível na interface.
@@ -27,10 +27,10 @@ Excluir uma campanha remove membros, convites e atividades por cascata. O mestre
 | --- | --- | --- | --- |
 | Campanha e histórico | Ler e editar a campanha; excluir como proprietário | Ler | Sem acesso |
 | Participantes e perfis do grupo | Ler, remover jogador, configurar permissões | Ler; sair da própria participação | Sem acesso |
-| Convites | Criar, consultar e revogar | Apenas convites destinados ao próprio e-mail | Apenas o convite destinado ao próprio e-mail |
+| Convites | Criar, consultar e revogar | Apenas convites destinados à própria conta | Apenas o convite destinado à própria conta |
 | Perfil | Editar o próprio; ler perfis compartilhados | Editar o próprio; ler perfis compartilhados | Apenas o próprio |
 
-O e-mail de um convite é comparado ao e-mail **confirmado** em `auth.users`, sem confiar no e-mail enviado pelo navegador ou em claim desatualizada. O UUID do link não concede acesso. `my_invitations` expõe somente o nome da campanha e os dados necessários ao destinatário, sem liberar a leitura da campanha antes do aceite.
+O nome de usuário é resolvido pelo servidor e o convite é vinculado ao ID da conta. O UUID do link não concede acesso. `my_invitations` expõe somente o nome da campanha e os dados necessários ao destinatário, sem liberar a leitura da campanha antes do aceite. Os campos legados de identidade não aparecem na interface.
 
 Criação de campanha + participação do mestre é atômica. Aceite de convite bloqueia campanha e convite, valida vencimento/status/destinatário e insere somente papel `player`; não permite reaproveitamento nem substitui um papel existente. Criação/aceite/revogação usam a mesma ordem de bloqueios. A campanha admite até 20 convites pendentes; duplicações são impedidas por índice único parcial. Estados arquivados bloqueiam novos convites e novos aceites.
 
@@ -53,10 +53,10 @@ Edição de nome/descrição utiliza a última escrita confirmada no PostgreSQL 
 - Credenciais administrativas nunca ficam no frontend ou no Git. Erros públicos são traduzidos e não exibem detalhes internos do PostgreSQL.
 - Avatar aceita somente HTTPS e limita comprimento; pode usar provedor externo, explicitado na interface. Uploads e Storage ainda não estão habilitados.
 - Usuário precisa permanecer autenticado. Sessão é armazenada e renovada pelo Supabase Auth; logout limpa o cache de dados da aplicação.
-- Confirmação/recuperação PKCE precisa do navegador solicitante e allowlist exata de redirecionamentos. A publicação privada do Sites é uma barreira adicional de hospedagem e não substitui o RLS do aplicativo.
+- Acesso por usuário e senha sem e-mail ou PKCE. O servidor usa identificadores internos para integrar o Supabase Auth. Veja `ACESSO-POR-USUARIO.md` para os limites e a conversão das contas antigas.
 - Logs registram alterações importantes, sem senhas, tokens ou conteúdo de notas privadas. A exclusão de campanha remove também seus logs; não são trilha de auditoria imutável externa.
 - Antes de uso real, configure backup do projeto Supabase e documente uma restauração em ambiente separado. As migrations reproduzem a estrutura, não substituem backup de dados. Verifique retenção e recursos disponíveis no plano contratado.
-- Rate limits e entrega SMTP são configuração do Supabase Auth; nenhum envio automático de convite de campanha está implementado.
+- O endpoint de acesso aplica limites persistentes no banco, além das proteções do Auth. Convites são exibidos dentro do aplicativo; não há envio de e-mail.
 
 ## Referências consultadas
 

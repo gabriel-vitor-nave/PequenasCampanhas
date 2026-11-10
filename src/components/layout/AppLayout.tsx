@@ -27,7 +27,6 @@ export function AppLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const { sidebarOpen, setSidebarOpen } = useUI()
-  const { user } = useAuth()
   const profile = useProfile()
   const [error, setError] = useState<unknown>(null)
   const [busy, setBusy] = useState(false)
@@ -55,7 +54,7 @@ export function AppLayout() {
       <div className="workspace-label">SEU ESPAÇO DE AVENTURAS</div><nav>{navigation.map(({ to, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}><Icon size={18} strokeWidth={1.7} />{label}{to === '/campanhas' && <ChevronRight size={14} className="nav-chevron" />}</NavLink>)}</nav>
       <div className="sidebar-note"><span className="small-rule" /><p>Histórias melhores<br />começam em boa companhia.</p><span>Pequenas Campanhas</span></div>
       <nav className="sidebar-bottom"><NavLink to="/perfil" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}><UserRound size={18} />Perfil</NavLink><NavLink to="/configuracoes" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}><Settings2 size={18} />Configurações</NavLink></nav>
-      <div className="account-block"><NavLink to="/perfil" className="account-link"><span className="avatar">{initials(name)}</span><span><strong>{name}</strong><small>{user?.email}</small></span></NavLink><Button variant="ghost" onClick={() => void signOut()} busy={busy} aria-label="Sair da conta"><LogOut size={17} /></Button></div><ErrorNotice error={error} />
+      <div className="account-block"><NavLink to="/perfil" className="account-link"><span className="avatar">{initials(name)}</span><span><strong>{name}</strong><small>{profile.data?.username}</small></span></NavLink><Button variant="ghost" onClick={() => void signOut()} busy={busy} aria-label="Sair da conta"><LogOut size={17} /></Button></div><ErrorNotice error={error} />
     </aside><div className="app-body"><header className="topbar"><Button variant="ghost" className="mobile-menu" onClick={() => setSidebarOpen(true)} aria-expanded={sidebarOpen} aria-label="Abrir menu"><Menu size={21} /></Button><div className="breadcrumb">Meu espaço <ChevronRight size={13} /><span>{location.pathname === '/' ? 'Início' : location.pathname.startsWith('/campanhas/') ? 'Campanha' : location.pathname === '/campanhas' ? 'Campanhas' : location.pathname === '/perfil' ? 'Perfil' : location.pathname === '/biblioteca' ? 'Biblioteca' : 'Configurações'}</span></div><span className="topbar-caption">Dê vida à próxima história.</span></header>
       <main id="main-content" className="main-content"><Outlet /></main><footer className="app-footer"><span>Pequenas Campanhas</span><span>Feito para jogar junto.</span></footer>
     </div></div>
