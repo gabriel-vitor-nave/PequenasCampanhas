@@ -1,4 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from 'react'
 import { BrowserRouter, Link, Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '../modules/auth/AuthProvider'
@@ -13,12 +13,13 @@ import { LibraryPage } from './LibraryPage'
 import { CampaignsPage } from '../modules/campaigns/CampaignsPage'
 import { CampaignDetailPage } from '../modules/campaigns/CampaignDetailPage'
 import { ProfilePage } from '../modules/profile/ProfilePage'
+const TablePage = lazy(() => import('../modules/table/TablePage').then(module => ({ default: module.TablePage })))
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 15_000, refetchOnWindowFocus: true, refetchOnReconnect: true, retry: 1, refetchInterval: 60_000 }, mutations: { retry: false } } })
 function RequireAuth() {
   const { user, loading, error } = useAuth()
   const location = useLocation()
-  if (loading) return <Loading label="Preparando seu espaço…" />
+  if (loading) return <Loading label="Carregando…" />
   if (error) return <div className="centered-page"><ErrorNotice error={error} /><Link to="/entrar">Voltar para entrar</Link></div>
   if (!user) return <Navigate replace to={`/entrar?next=${encodeURIComponent(location.pathname + location.search)}`} />
   return <Outlet />
@@ -33,6 +34,6 @@ export function App() {
   return <ErrorBoundary><QueryClientProvider client={queryClient}><BrowserRouter><a className="skip-link" href="#main-content">Pular para o conteúdo</a>{!config ? <SetupPage /> : <AuthProvider><Routes>
     <Route path="/entrar" element={<AuthPage />} /><Route path="/cadastro" element={<AuthPage />} />
     <Route path="/recuperar-senha" element={<Navigate to="/entrar" replace />} /><Route path="/auth/*" element={<Navigate to="/entrar" replace />} />
-    <Route element={<RequireAuth />}><Route element={<AppLayout />}><Route index element={<HomePage />} /><Route path="campanhas" element={<CampaignsPage />} /><Route path="campanhas/:id" element={<CampaignDetailPage />} /><Route path="perfil" element={<ProfilePage />} /><Route path="configuracoes" element={<SettingsPage />} /><Route path="biblioteca" element={<LibraryPage />} /><Route path="*" element={<div className="panel"><h1>Este caminho ainda não foi explorado.</h1><Link className="text-link" to="/">Voltar para o início</Link></div>} /></Route></Route>
+    <Route element={<RequireAuth />}><Route path="campanhas/:id/mesa" element={<Suspense fallback={<Loading label="Abrindo mesa…" />}><TablePage /></Suspense>} /><Route element={<AppLayout />}><Route index element={<HomePage />} /><Route path="campanhas" element={<CampaignsPage />} /><Route path="campanhas/:id" element={<CampaignDetailPage />} /><Route path="perfil" element={<ProfilePage />} /><Route path="configuracoes" element={<SettingsPage />} /><Route path="biblioteca" element={<LibraryPage />} /><Route path="*" element={<div className="panel"><h1>Página não encontrada.</h1><Link className="text-link" to="/">Voltar para o início</Link></div>} /></Route></Route>
   </Routes></AuthProvider>}</BrowserRouter></QueryClientProvider></ErrorBoundary>
 }

@@ -15,10 +15,10 @@ export function CampaignForm({ campaign, onClose }: { campaign?: Campaign; onClo
     await cache.invalidateQueries(); onClose(); if (!campaign) navigate(`/campanhas/${id}`)
   } })
   function submit(event: FormEvent) { event.preventDefault(); mutation.mutate() }
-  return <Dialog title={campaign ? 'Editar campanha' : 'Uma nova história começa aqui.'} onClose={() => { if (!mutation.isPending) onClose() }}><form className="form-stack" onSubmit={submit}>
-    <p className="muted">{campaign ? 'Atualize as informações que seu grupo vê.' : 'Dê um nome à aventura. Você poderá convidar o grupo em seguida.'}</p>
-    <label>Nome da campanha<input name="name" autoFocus required minLength={3} maxLength={80} value={name} onChange={event => setName(event.target.value)} placeholder="Como sua história será conhecida?" /></label>
-    <label>Descrição <span className="optional">opcional</span><textarea rows={4} maxLength={2000} value={description} onChange={event => setDescription(event.target.value)} placeholder="Uma premissa, um lugar, um convite à aventura…" /><small className="field-count">{description.length}/2.000</small></label>
+  return <Dialog title={campaign ? 'Editar campanha' : 'Nova campanha'} onClose={() => { if (!mutation.isPending) onClose() }}><form className="form-stack" onSubmit={submit}>
+
+    <label>Nome da campanha<input name="name" autoFocus required minLength={3} maxLength={80} value={name} onChange={event => setName(event.target.value)} placeholder="Nome" /></label>
+    <label>Descrição <span className="optional">opcional</span><textarea rows={4} maxLength={2000} value={description} onChange={event => setDescription(event.target.value)} placeholder="Descrição da campanha" /><small className="field-count">{description.length}/2.000</small></label>
     <div className="system-field"><BookOpen size={19} /><span><strong>Dungeons & Dragons</strong><small>5ª edição · Regras de 2024</small></span><span className="badge">Sistema inicial</span></div>
     <ErrorNotice error={mutation.error} /><div className="dialog-actions"><Button type="button" variant="secondary" disabled={mutation.isPending} onClick={onClose}>Cancelar</Button><Button type="submit" busy={mutation.isPending}>{campaign ? 'Salvar alterações' : 'Criar campanha'}<ArrowRight size={16} /></Button></div>
   </form></Dialog>

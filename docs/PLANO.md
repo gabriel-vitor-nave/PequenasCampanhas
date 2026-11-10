@@ -1,30 +1,21 @@
-# Plano de implementação
+# Ordem de implementação
 
-## Inspeção inicial — 9 de novembro de 2026
+As [diretrizes recebidas em 9/11/2026](DIRETRIZES.md) substituem a ordem anterior. Foco em sessões reais em computadores. Login por usuário/senha. Fonte no GitHub e publicação no ChatGPT Sites.
 
-Repositório remoto vazio, sem commits ou arquivos, clonado na pasta fornecida. Nenhuma implementação anterior foi sobrescrita. Stack: React + TypeScript + Vite, React Router, Tailwind, Lucide, TanStack Query, Zustand e Supabase. Hospedagem inicial: ChatGPT Sites, conforme ajuste solicitado pelo usuário; Vercel fica preparada para depois. Sem Next.js. Todo código deve ser enviado ao GitHub.
+## Fundação preservada
 
-## Entrega 1 — Fundação funcional
+Contas, perfil, campanhas, convites por usuário, participantes, permissões e histórico. Nenhuma campanha existente é substituída pelas migrations da mesa.
 
-1. Design system grafite/âmbar, navegação responsiva e estados acessíveis.
-2. Cliente Supabase tipado; configuração pública validada sem backend fictício.
-3. Cadastro e login com somente usuário e senha, sessão imediata e logout. E-mail foi removido por instrução do usuário.
-4. Perfil, avatar por URL HTTPS e preferências persistidas no banco.
-5. Criar, consultar, editar, arquivar, reativar e excluir campanhas.
-6. Membros, convites vinculados ao e-mail, aceite/recusa/revogação e permissões de participante.
-7. Migrations, RLS, operações atômicas no PostgreSQL, atualização de dados por Realtime e logs.
-8. Testes de interface/domínio, testes SQL de isolamento e fluxos E2E; build de produção.
+## Primeira entrega — mesa jogável
 
-## Próximas entregas (escopo preservado)
+Mesa PixiJS em rota própria; upload de mapas, grid, câmera local, cenas, tokens autorizados, desenhos compartilhados/privados, dados oficiais no servidor, combate básico, Realtime, persistência e áudio básico. Interface compacta em grafite/cinza/azul, sem banners promocionais. Veja [arquitetura e aceitação](MESA-JOGAVEL.md).
 
-- **2 — Mesa:** PixiJS, viewport, grid, cenas/mapas, camadas, tokens, desenhos colaborativos e sincronização incremental. Evoluir permissões por recurso.
-- **3 — RPG:** rolagens oficiais no servidor, fichas D&D 2024, inventários, magias, iniciativa, condições e controle de fala.
-- **4 — Mestre:** NPCs, monstros, encontros, missões, facções, diário, notas privadas/compartilhadas, sessões e preparação de cenas.
-- **5 — Imersão:** uploads validados, biblioteca de áudio local e sincronizado explicitamente diferenciados, playlists e efeitos.
-- **6 — Estabilização:** concorrência, reconexão, desempenho da mesa, acessibilidade, mobile, backup/restauração e revisão de segurança.
+## Segunda entrega
 
-Não antecipar iluminação dinâmica. Não apresentar funções futuras como prontas. Não carregar dados de campanhas fictícias.
+Fichas D&D 5e 2024, régua, áreas/templates, névoa de guerra, vínculos entre ficha e token, auras, notas privadas de tokens, NPCs, encontros, diário, handouts e permissões adicionais por recurso.
 
-## Dependências externas
+## Terceira entrega
 
-Projeto Supabase já conectado, migrations aplicadas e função de acesso por usuário publicada. Não há dependência de e-mail, SMTP ou callbacks no fluxo atual. Credenciais administrativas permanecem somente no servidor. Para a migração futura à Vercel, manter as variáveis públicas e autorizar a nova origem no CORS da função. A mesa virtual e sua sincronização entram na Fase 2.
+Automatizações de regras, macros, playlists/filas/fades, trilhas por cena, efeitos acionados por eventos, preparação avançada e exportação/restauração completa com arquivos.
+
+Voz e vídeo ficam no Discord. Nenhuma migração à Vercel nesta etapa.

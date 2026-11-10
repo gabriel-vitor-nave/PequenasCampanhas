@@ -45,6 +45,20 @@ describe('foundation migration and authorization', () => {
       create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
       grant usage on schema auth to anon, authenticated;
       grant execute on function auth.uid() to anon, authenticated;
+      create schema storage;
+      create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);
+      create table storage.objects(id uuid primary key,bucket_id text,name text);
+      alter table storage.objects enable row level security;
+      create schema realtime;
+      create table realtime.messages(id bigint,topic text);
+      alter table realtime.messages enable row level security;
+      create function realtime.topic() returns text language sql stable as $$ select current_setting('realtime.topic',true) $$;
+      grant usage on schema storage,realtime to authenticated;
+      grant select on storage.objects to authenticated;
+      grant select,insert on realtime.messages to authenticated;
+      create schema extensions;
+      -- PGlite platform adapter: native UUID RNG supplies the first four random bytes.
+      create function extensions.gen_random_bytes(n integer) returns bytea language sql volatile as $$ select substring(decode(replace(gen_random_uuid()::text,'-',''),'hex') from 1 for n) $$;
       create publication supabase_realtime;
     `)
     const migrations = new URL('../../supabase/migrations/', import.meta.url)
@@ -64,6 +78,66 @@ describe('foundation migration and authorization', () => {
   })
   afterEach(async () => { await db.exec('rollback; reset role') })
   afterAll(async () => { await db?.close() })
+  it('opens a persistent scene and enforces token ownership with idempotent movement',async()=>{
+    const scene=await scalar<string>('select public.ensure_table($1)',[campaign])
+    expect(await scalar('select public.ensure_table($1)',[campaign])).toBe(scene)
+    await joinPlayer();await identity(gm)
+    const token=await scalar<string>('insert into public.table_tokens(id,campaign_id,scene_id,name,owner_ids) values(gen_random_uuid(),$1,$2,\'Herói\',array[$3::uuid]) returning id',[campaign,scene,player])
+    await identity(player)
+    const request=await scalar<string>('select gen_random_uuid()'),moves=[{id:token,x:128,y:64,version:1}]
+    await db.query('select public.move_table_tokens($1,$2,$3)',[scene,JSON.stringify(moves),request])
+    await db.query('select public.move_table_tokens($1,$2,$3)',[scene,JSON.stringify(moves),request])
+    expect(await scalar('select version from public.table_tokens where id=$1',[token])).toBe(2)
+    expect(await scalar('select x from public.table_tokens where id=$1',[token])).toBe(128)
+    expect((await db.query('update public.table_tokens set hp=999 where id=$1 returning id',[token])).rows).toHaveLength(0)
+    await identity(gm);await db.query("update public.table_tokens set owner_ids='{}' where id=$1",[token]);await identity(player)
+    await expect(attempted('select public.move_table_tokens($1,$2,gen_random_uuid())',[scene,JSON.stringify([{...moves[0],version:3}])])).rejects.toThrow('PC_FORBIDDEN')
+  })
+  it('never sends private scenes, hidden tokens or private drawings to players',async()=>{
+    const scene=await scalar<string>('select public.ensure_table($1)',[campaign]);await joinPlayer();await identity(gm)
+    await db.query("insert into public.table_tokens(id,campaign_id,scene_id,name,visible) values(gen_random_uuid(),$1,$2,'Segredo',false)",[campaign,scene])
+    await db.query("insert into public.table_drawings(id,campaign_id,scene_id,created_by,visibility,tool,points,text) values(gen_random_uuid(),$1,$2,$3,'gm','text','[[0,0]]','Segredo')",[campaign,scene,gm])
+    const request=await scalar<string>('select gen_random_uuid()')
+    await db.query("select public.manage_table_scene($1,null,'create','Preparação privada',$2)",[campaign,request])
+    await identity(player)
+    expect(await scalar('select count(*)::int from public.table_scenes where campaign_id=$1',[campaign])).toBe(1)
+    expect(await scalar('select count(*)::int from public.table_tokens where scene_id=$1',[scene])).toBe(0)
+    expect(await scalar('select count(*)::int from public.table_drawings where scene_id=$1',[scene])).toBe(0)
+    await db.query("insert into public.table_drawings(id,campaign_id,scene_id,created_by,tool,points) values(gen_random_uuid(),$1,$2,$3,'line','[[0,0],[64,64]]')",[campaign,scene,player])
+    await expect(attempted("insert into public.table_drawings(id,campaign_id,scene_id,created_by,visibility,tool,points) values(gen_random_uuid(),$1,$2,$3,'gm','line','[[0,0],[64,64]]')",[campaign,scene,player])).rejects.toThrow(/row-level security/)
+  })
+  it('calculates official dice once on the server and protects private results',async()=>{
+    await joinPlayer();const request=await scalar<string>('select gen_random_uuid()')
+    await db.query("select public.roll_table_dice($1,'2d20kh1+5','shared','Teste',$2)",[campaign,request])
+    await db.query("select public.roll_table_dice($1,'2d20kh1+5','shared','Teste',$2)",[campaign,request])
+    const result=await db.query<{values:number[];kept:number[];total:number}>('select "values",kept,total from public.table_rolls where id=$1',[request])
+    expect(result.rows[0].values).toHaveLength(2);expect(result.rows[0].kept).toEqual([Math.max(...result.rows[0].values)])
+    expect(result.rows[0].total).toBe(Math.max(...result.rows[0].values)+5)
+    expect(await scalar('select count(*)::int from public.table_rolls where campaign_id=$1',[campaign])).toBe(1)
+    await expect(attempted("select public.roll_table_dice($1,'41d6','shared','',gen_random_uuid())",[campaign])).rejects.toThrow('PC_INVALID_DICE')
+    await expect(attempted("select public.roll_table_dice($1,'1d20','gm','',gen_random_uuid())",[campaign])).rejects.toThrow('PC_FORBIDDEN')
+    await identity(gm);await db.query("select public.roll_table_dice($1,'1d20','gm','Segredo',gen_random_uuid())",[campaign]);await identity(player)
+    expect(await scalar('select count(*)::int from public.table_rolls where campaign_id=$1',[campaign])).toBe(1)
+  })
+  it('persists combat rounds, HP and shared audio commands with server authorization',async()=>{
+    const scene=await scalar<string>('select public.ensure_table($1)',[campaign]);await joinPlayer();await identity(gm)
+    const token=await scalar<string>("insert into public.table_tokens(id,campaign_id,scene_id,name,temp_hp) values(gen_random_uuid(),$1,$2,'Herói',3) returning id",[campaign,scene])
+    await db.query('insert into public.table_combatants(campaign_id,scene_id,token_id,initiative) values($1,$2,$3,15)',[campaign,scene,token])
+    await db.query("select public.table_combat_action($1,'start',1,gen_random_uuid())",[scene])
+    const step=await scalar<string>('select gen_random_uuid()')
+    await db.query("select public.table_combat_action($1,'step',1,$2)",[scene,step]);await db.query("select public.table_combat_action($1,'step',1,$2)",[scene,step])
+    expect(await scalar('select round from public.table_combat where scene_id=$1',[scene])).toBe(2)
+    await db.query('select public.adjust_table_hp($1,-5,gen_random_uuid())',[token])
+    expect(await scalar('select hp from public.table_tokens where id=$1',[token])).toBe(8)
+    expect(await scalar('select temp_hp from public.table_tokens where id=$1',[token])).toBe(0)
+    await db.exec('reset role')
+    const asset=await scalar<string>("insert into public.table_assets(id,campaign_id,name,kind,path,mime,bytes,created_by) values(gen_random_uuid(),$1,'Som de teste','audio','test/audio.wav','audio/wav',100,$2) returning id",[campaign,gm])
+    await identity(player);expect(await scalar('select count(*)::int from public.table_assets where id=$1',[asset])).toBe(0)
+    await expect(attempted('select public.set_table_music($1,$2,true,false,0,.5,gen_random_uuid())',[campaign,asset])).rejects.toThrow('PC_FORBIDDEN')
+    await identity(gm);await db.query('select public.set_table_music($1,$2,true,false,0,.5,gen_random_uuid())',[campaign,asset]);await identity(player)
+    expect(await scalar('select playing from public.table_music where campaign_id=$1',[campaign])).toBe(true)
+    expect(await scalar('select count(*)::int from public.table_assets where id=$1',[asset])).toBe(1)
+  })
   it('preserves existing credentials until the owner supplies their password', async () => {
     await db.exec('reset role')
     const result=await db.query<{id:string;email:string;encrypted_password:string;confirmed:boolean}>('select id,email,encrypted_password,email_confirmed_at is not null as confirmed from auth.users where id=$1',[gm])

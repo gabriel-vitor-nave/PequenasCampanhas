@@ -25,7 +25,7 @@ export const campaignService = {
     return data
   },
   async delete(id: string) {
-    const { data, error } = await backend().from('campaigns').delete().eq('id', id).select('id').single()
+    const { data, error } = await backend().functions.invoke('table-assets?campaign_id=' + encodeURIComponent(id), { method: 'DELETE' })
     if (error) throw error
     return data
   },

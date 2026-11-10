@@ -40,3 +40,7 @@ double_confirm_changes = true
 [functions.account-access]
 # Public password entrypoint: authenticates credentials itself and validates the app API key.
 verify_jwt = false
+
+[functions.table-assets]
+# The handler validates the bearer session with Auth, then checks GM membership.
+verify_jwt = false

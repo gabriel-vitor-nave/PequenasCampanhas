@@ -22,5 +22,5 @@ function ProfileForm({ profile }: { profile: Profile }) {
 }
 export function ProfilePage() {
   const profile = useProfile()
-  return <><div className="page-heading"><div><span className="eyebrow">QUEM ESTÁ À MESA</span><h1>Seu perfil<span className="heading-dot">.</span></h1><p>O rosto e o nome por trás das suas aventuras.</p></div></div>{profile.isPending ? <Loading /> : profile.isError ? <ErrorNotice error={profile.error} /> : <ProfileForm profile={profile.data} />}</>
+  return <><div className="page-heading"><div><h1>Perfil</h1></div></div>{profile.isPending ? <Loading /> : profile.isError ? <ErrorNotice error={profile.error} /> : <ProfileForm profile={profile.data} />}</>
 }
