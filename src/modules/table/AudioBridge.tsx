@@ -1,5 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import type { Music, Sfx } from "./types";
+function silentWav() {
+  const bytes = new Uint8Array(364),
+    data = new DataView(bytes.buffer);
+  for (const [offset, text] of [
+    [0, "RIFF"],
+    [8, "WAVEfmt "],
+    [36, "data"],
+  ] as const)
+    for (let i = 0; i < text.length; i++)
+      bytes[offset + i] = text.charCodeAt(i);
+  data.setUint32(4, 356, true);
+  data.setUint32(16, 16, true);
+  data.setUint16(20, 1, true);
+  data.setUint16(22, 1, true);
+  data.setUint32(24, 8000, true);
+  data.setUint32(28, 16000, true);
+  data.setUint16(32, 2, true);
+  data.setUint16(34, 16, true);
+  data.setUint32(40, 320, true);
+  return "data:audio/wav;base64," + btoa(String.fromCharCode(...bytes));
+}
 export type AudioControl = {
   enabled: boolean;
   blocked: boolean;
@@ -22,6 +43,10 @@ type Props = {
 export function AudioBridge(props: Props) {
   const music = useRef<HTMLAudioElement>(null),
     effects = useRef<HTMLDivElement>(null),
+    pool = useRef<HTMLAudioElement[]>([]),
+    audioContext = useRef<AudioContext | null>(null),
+    gains = useRef(new Map<HTMLAudioElement, GainNode>()),
+    unlocking = useRef(false),
     latest = useRef(props),
     seen = useRef(new Set<string>()),
     initialized = useRef(false),
@@ -32,6 +57,57 @@ export function AudioBridge(props: Props) {
     return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0.7;
   });
   latest.current = props;
+  const audioVolume = (audio: HTMLAudioElement, value: number) => {
+    const gain = gains.current.get(audio),
+      volume = Math.max(0, Math.min(1, value));
+    if (gain) {
+      audio.volume = 1;
+      gain.gain.value = volume;
+    } else audio.volume = volume;
+  };
+  // Unlock these same elements inside the tap handler. WebKit grants media
+  // playback per element; creating a new <audio> for each remote SFX loses it.
+  // https://webkit.org/blog/7734/auto-play-policy-changes-for-macos/
+  const enable = () => {
+    if (unlocking.current) return;
+    unlocking.current = true;
+    const AudioClass =
+      window.AudioContext ??
+      (window as Window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!audioContext.current && AudioClass)
+      audioContext.current = new AudioClass();
+    const resume = audioContext.current?.resume();
+    while (pool.current.length < 16) {
+      const audio = new Audio();
+      audio.crossOrigin = "anonymous";
+      pool.current.push(audio);
+      effects.current?.appendChild(audio);
+    }
+    const ready = [music.current, ...pool.current]
+      .filter((audio): audio is HTMLAudioElement => !!audio)
+      .map((audio) => {
+        audio.pause();
+        audio.onloadedmetadata = null;
+        delete audio.dataset.sfx;
+        delete audio.dataset.asset;
+        if (audioContext.current && !gains.current.has(audio)) {
+          const gain = audioContext.current.createGain();
+          audioContext.current.createMediaElementSource(audio).connect(gain);
+          gain.connect(audioContext.current.destination);
+          gains.current.set(audio, gain);
+        }
+        audioVolume(audio, 0);
+        audio.loop = false;
+        audio.src = silentWav();
+        return audio.play().then(() => audio.pause());
+      });
+    void Promise.allSettled([resume, ...ready]).then((results) => {
+      unlocking.current = false;
+      setEnabled(true);
+      setBlocked(results.some((result) => result.status === "rejected"));
+    });
+  };
   const targetPosition = (state: Music) =>
     state.position +
     (state.playing
@@ -44,6 +120,7 @@ export function AudioBridge(props: Props) {
         )
       : 0);
   const reconcile = () => {
+    if (unlocking.current) return;
     const element = music.current,
       state = latest.current.music;
     if (!element) return;
@@ -58,7 +135,7 @@ export function AudioBridge(props: Props) {
       element.src = url;
       element.load();
     }
-    element.volume = Math.max(0, Math.min(1, volume * state.volume));
+    audioVolume(element, volume * state.volume);
     element.loop = state.loop;
     const sync = () => {
       let position = targetPosition(state);
@@ -85,7 +162,8 @@ export function AudioBridge(props: Props) {
     if (effects.current)
       for (const audio of effects.current.querySelectorAll("audio")) {
         audio.pause();
-        audio.remove();
+        delete audio.dataset.sfx;
+        audio.onloadedmetadata = null;
       }
   };
   const playEffect = (
@@ -96,14 +174,22 @@ export function AudioBridge(props: Props) {
   ) => {
     const url = latest.current.urls[assetId];
     if (!url || !enabled) return;
-    const audio = new Audio(url);
+    const audio =
+      pool.current.find((audio) => !audio.dataset.sfx) ?? pool.current[0];
+    if (!audio) return;
+    audio.pause();
+    audio.src = url;
     audio.dataset.sfx = eventId;
     audio.dataset.masterVolume = String(masterVolume);
-    audio.volume = Math.max(0, Math.min(1, volume * masterVolume));
+    audioVolume(audio, volume * masterVolume);
     audio.preload = "auto";
-    effects.current?.appendChild(audio);
-    audio.onended = () => audio.remove();
-    audio.onerror = () => audio.remove();
+    const release = () => {
+      audio.pause();
+      delete audio.dataset.sfx;
+      audio.onloadedmetadata = null;
+    };
+    audio.onended = release;
+    audio.onerror = release;
     audio.onloadedmetadata = () => {
       const elapsed = createdAt
         ? Math.max(
@@ -119,13 +205,13 @@ export function AudioBridge(props: Props) {
         elapsed >= audio.duration &&
         elapsed > 3
       ) {
-        audio.remove();
+        release();
         return;
       }
       audio.currentTime = elapsed < audio.duration ? elapsed : 0;
       void audio.play().catch(() => {
         setBlocked(true);
-        audio.remove();
+        release();
       });
     };
   };
@@ -134,10 +220,7 @@ export function AudioBridge(props: Props) {
       enabled,
       blocked,
       volume,
-      enable: () => {
-        setEnabled(true);
-        setBlocked(false);
-      },
+      enable,
       setVolume: (value) => {
         const next = Math.max(0, Math.min(1, value));
         localStorage.setItem("pc:volume", String(next));
@@ -151,10 +234,7 @@ export function AudioBridge(props: Props) {
   useEffect(() => {
     if (effects.current)
       for (const audio of effects.current.querySelectorAll("audio"))
-        audio.volume = Math.max(
-          0,
-          Math.min(1, volume * Number(audio.dataset.masterVolume ?? 1)),
-        );
+        audioVolume(audio, volume * Number(audio.dataset.masterVolume ?? 1));
   }, [volume]);
   useEffect(() => {
     reconcile();
@@ -194,6 +274,7 @@ export function AudioBridge(props: Props) {
     () => () => {
       music.current?.pause();
       stopLocal();
+      void audioContext.current?.close();
     },
     [],
   );
@@ -203,7 +284,11 @@ export function AudioBridge(props: Props) {
         ref={music}
         data-table-music="true"
         preload="metadata"
-        onEnded={() => latest.current.onEnded()}
+        crossOrigin="anonymous"
+        onEnded={() => {
+          if (music.current?.dataset.asset && !unlocking.current)
+            latest.current.onEnded();
+        }}
         hidden
       />
       <div ref={effects} hidden aria-hidden="true" />

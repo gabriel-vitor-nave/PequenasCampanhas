@@ -1,4 +1,37 @@
 import type { Camera, Drawing, Point, Scene, Token } from "../types";
+export function clientToCanvas(
+  client: Point,
+  bounds: Pick<DOMRect, "left" | "top" | "right">,
+  rotated: boolean,
+): Point {
+  return rotated
+    ? [client[1] - bounds.top, bounds.right - client[0]]
+    : [client[0] - bounds.left, client[1] - bounds.top];
+}
+export type Pinch = { camera: Camera; center: Point; distance: number };
+export function beginPinch(camera: Camera, a: Point, b: Point): Pinch {
+  return {
+    camera: { ...camera },
+    center: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
+    distance: Math.max(1, Math.hypot(a[0] - b[0], a[1] - b[1])),
+  };
+}
+export function pinchCamera(pinch: Pinch, a: Point, b: Point): Camera {
+  const anchor = screenToWorld(pinch.center, pinch.camera);
+  const scale = Math.min(
+    4,
+    Math.max(
+      0.1,
+      (pinch.camera.scale * Math.hypot(a[0] - b[0], a[1] - b[1])) /
+        pinch.distance,
+    ),
+  );
+  return {
+    x: (a[0] + b[0]) / 2 - anchor[0] * scale,
+    y: (a[1] + b[1]) / 2 - anchor[1] * scale,
+    scale,
+  };
+}
 export function screenToWorld(point: Point, camera: Camera): Point {
   return [
     (point[0] - camera.x) / camera.scale,

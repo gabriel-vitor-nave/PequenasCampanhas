@@ -1,3 +1,5 @@
+> Atualização posterior: o usuário pediu porte da mesa para celular, sempre em horizontal, e preparação integral pelo mestre com zero jogadores ou convites. Essas instruções substituem o recorte exclusivamente desktop abaixo.
+
 # Pequenas Campanhas — Diretrizes de desenvolvimento
 
 ## 1. Objetivo

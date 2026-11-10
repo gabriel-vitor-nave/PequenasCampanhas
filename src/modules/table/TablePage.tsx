@@ -39,6 +39,8 @@ import { errorMessage } from "../../lib/errors";
 import { tableService } from "./service";
 import { useAssetUrls, useTableData, useTableRealtime } from "./hooks";
 import { useTableUI, type Panel } from "./store";
+import { useTableViewport } from "./viewport";
+import { useTouchButtons } from "./touch-buttons";
 import { TableCanvas, type CanvasHandle } from "./canvas/TableCanvas";
 import { snapPoint } from "./canvas/geometry";
 import { TokensPanel } from "./panels/TokensPanel";
@@ -106,6 +108,9 @@ function tokenCopy(t: Token, offset: number): TokenInput {
 }
 
 export function TablePage() {
+  const viewport = useTableViewport();
+  const touchButtons = useTouchButtons(viewport.mobile);
+  const [drawingOptions, setDrawingOptions] = useState(false);
   const { id: campaignId = "" } = useParams(),
     { user } = useAuth(),
     cache = useQueryClient(),
@@ -248,6 +253,21 @@ export function TablePage() {
         tokenCopy(token, scene?.grid_size ?? 64),
       );
       if (copied) select(copied.id);
+    });
+  };
+  const pasteTokens = () => {
+    if (!gm || !sceneRef.current || !clipboard.current.length) return;
+    const scene = sceneRef.current;
+    void run(async () => {
+      const rows = await Promise.all(
+        clipboard.current.map((token) =>
+          tableService.addToken({
+            ...tokenCopy(token, scene.grid_size),
+            scene_id: scene.id,
+          }),
+        ),
+      );
+      ui.set({ selection: rows.flatMap((row) => (row ? [row.id] : [])) });
     });
   };
   const removeTokens = (ids: string[]) =>
@@ -486,7 +506,13 @@ export function TablePage() {
       </main>
     );
   return (
-    <main id="main-content" className="table-shell">
+    <main
+      {...touchButtons}
+      id="main-content"
+      className={`table-shell${viewport.mobile ? " is-mobile" : ""}`}
+      data-rotated={viewport.rotated}
+      style={viewport.style}
+    >
       <header className="table-topbar">
         <Link
           to={`/campanhas/${campaignId}`}
@@ -508,7 +534,11 @@ export function TablePage() {
         <details className="table-presence">
           <summary>
             <Users size={15} />
-            {realtime.present.length} conectado(s)
+            {core.data?.roster.filter(
+              (m) =>
+                m.role === "player" && realtime.present.includes(m.user_id),
+            ).length ?? 0}{" "}
+            jogador(es)
             <ChevronDown size={12} />
           </summary>
           <div>
@@ -573,11 +603,24 @@ export function TablePage() {
               disabled={
                 !["select", "pan"].includes(id) && !gm && !member?.can_draw
               }
-              onClick={() => ui.set({ tool: id })}
+              onClick={() => {
+                ui.set({ tool: id });
+                setDrawingOptions(id === "text");
+              }}
             >
               <Icon size={19} />
             </button>
           ))}
+          <button
+            className="table-mobile-only"
+            aria-label="Selecionar vários tokens"
+            aria-pressed={ui.multiSelect}
+            onClick={() =>
+              ui.set({ multiSelect: !ui.multiSelect, tool: "select" })
+            }
+          >
+            <Layers size={19} />
+          </button>
           <span className="tool-divider" />
           <button
             title="Desfazer (Ctrl+Z)"
@@ -622,6 +665,7 @@ export function TablePage() {
                 userId={user.id}
                 canDraw={member?.can_draw ?? false}
                 canMove={member?.can_move_tokens ?? false}
+                rotated={viewport.rotated}
                 activeToken={
                   content.data?.combat?.started
                     ? content.data.combat.active_token_id
@@ -681,76 +725,106 @@ export function TablePage() {
             </div>
           )}
           {ui.tool !== "select" && ui.tool !== "pan" && (
-            <div className="drawing-options">
-              <label title="Cor">
-                <input
-                  aria-label="Cor do desenho"
-                  type="color"
-                  value={ui.color}
-                  onChange={(e) => ui.set({ color: e.target.value })}
-                />
-              </label>
-              <label>
-                Espessura
-                <input
-                  aria-label="Espessura"
-                  type="number"
-                  min={1}
-                  max={40}
-                  value={ui.width}
-                  onChange={(e) =>
-                    ui.set({
-                      width: Math.max(1, Math.min(40, Number(e.target.value))),
-                    })
-                  }
-                />
-              </label>
-              <label>
-                Opacidade
-                <input
-                  aria-label="Opacidade do desenho"
-                  type="number"
-                  min={0.05}
-                  max={1}
-                  step={0.05}
-                  value={ui.opacity}
-                  onChange={(e) =>
-                    ui.set({
-                      opacity: Math.max(
-                        0.05,
-                        Math.min(1, Number(e.target.value)),
-                      ),
-                    })
-                  }
-                />
-              </label>
-              {gm && (
-                <label className="table-check">
+            <div
+              className={`drawing-options${drawingOptions ? " options-open" : ""}`}
+            >
+              <button
+                className="table-mobile-only"
+                aria-label="Opções do desenho"
+                aria-expanded={drawingOptions}
+                onClick={() => setDrawingOptions(!drawingOptions)}
+              >
+                <Settings2 size={16} />
+                Traço
+              </button>
+              <div className="drawing-options-fields">
+                <label title="Cor">
                   <input
-                    type="checkbox"
-                    checked={ui.privateDrawing}
+                    aria-label="Cor do desenho"
+                    type="color"
+                    value={ui.color}
+                    onChange={(e) => ui.set({ color: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Espessura
+                  <input
+                    aria-label="Espessura"
+                    type="number"
+                    min={1}
+                    max={40}
+                    value={ui.width}
                     onChange={(e) =>
-                      ui.set({ privateDrawing: e.target.checked })
+                      ui.set({
+                        width: Math.max(
+                          1,
+                          Math.min(40, Number(e.target.value)),
+                        ),
+                      })
                     }
                   />
-                  <EyeOff size={13} />
-                  Privado
                 </label>
-              )}
-              {ui.tool === "text" && (
-                <input
-                  aria-label="Texto do desenho"
-                  value={ui.text}
-                  maxLength={2000}
-                  onChange={(e) => ui.set({ text: e.target.value })}
-                  placeholder="Texto para inserir"
-                />
-              )}
-              {gm && (
-                <button onClick={clearLayer} title="Limpar camada">
-                  <Trash2 size={15} />
-                </button>
-              )}
+                <label>
+                  Opacidade
+                  <input
+                    aria-label="Opacidade do desenho"
+                    type="number"
+                    min={0.05}
+                    max={1}
+                    step={0.05}
+                    value={ui.opacity}
+                    onChange={(e) =>
+                      ui.set({
+                        opacity: Math.max(
+                          0.05,
+                          Math.min(1, Number(e.target.value)),
+                        ),
+                      })
+                    }
+                  />
+                </label>
+                {gm && (
+                  <label className="table-check">
+                    <input
+                      type="checkbox"
+                      checked={ui.privateDrawing}
+                      onChange={(e) =>
+                        ui.set({ privateDrawing: e.target.checked })
+                      }
+                    />
+                    <EyeOff size={13} />
+                    Privado
+                  </label>
+                )}
+                {ui.tool === "text" && (
+                  <input
+                    aria-label="Texto do desenho"
+                    value={ui.text}
+                    maxLength={2000}
+                    onChange={(e) => ui.set({ text: e.target.value })}
+                    placeholder="Texto para inserir"
+                  />
+                )}
+                {gm && (
+                  <button onClick={clearLayer} title="Limpar camada">
+                    <Trash2 size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {!!ui.selection.length && !ui.panel && (
+            <div className="table-selection-actions table-mobile-only">
+              <span>{ui.selection.length} selecionado(s)</span>
+              <button onClick={() => ui.set({ panel: "tokens" })}>
+                Editar seleção
+              </button>
+              <button
+                aria-label="Limpar seleção"
+                onClick={() => ui.set({ selection: [], multiSelect: false })}
+              >
+                <X size={16} />
+              </button>
             </div>
           )}
           {confirm && (
@@ -780,6 +854,13 @@ export function TablePage() {
             </button>
           ))}
         </nav>
+        {ui.panel && viewport.mobile && (
+          <button
+            className="table-panel-scrim"
+            aria-label="Fechar painel da mesa"
+            onClick={() => ui.set({ panel: null })}
+          />
+        )}
         {ui.panel && (
           <aside
             className="table-panel"
@@ -796,14 +877,12 @@ export function TablePage() {
                   width = ui.panelWidth;
                 event.currentTarget.setPointerCapture(event.pointerId);
                 const move = (e: PointerEvent) =>
-                  useTableUI
-                    .getState()
-                    .set({
-                      panelWidth: Math.min(
-                        520,
-                        Math.max(260, width + start - e.clientX),
-                      ),
-                    });
+                  useTableUI.getState().set({
+                    panelWidth: Math.min(
+                      520,
+                      Math.max(260, width + start - e.clientX),
+                    ),
+                  });
                 const end = () => {
                   window.removeEventListener("pointermove", move);
                   window.removeEventListener("pointerup", end);
@@ -1039,7 +1118,16 @@ export function TablePage() {
             top: Math.min(context.y, window.innerHeight - 230),
           }}
           role="menu"
+          aria-label="Ações da mesa"
         >
+          <button
+            className="table-mobile-only"
+            role="menuitem"
+            onClick={() => setContext(null)}
+          >
+            <X size={16} />
+            Fechar menu
+          </button>
           {context.token ? (
             <>
               <strong>{context.token.name}</strong>
@@ -1055,6 +1143,22 @@ export function TablePage() {
               </button>
               {gm && (
                 <>
+                  <button
+                    role="menuitem"
+                    onClick={() => {
+                      clipboard.current = ui.selection.includes(
+                        context.token!.id,
+                      )
+                        ? tokens.filter((token) =>
+                            ui.selection.includes(token.id),
+                          )
+                        : [context.token!];
+                      setContext(null);
+                    }}
+                  >
+                    <Copy size={14} />
+                    Copiar
+                  </button>
                   <button
                     role="menuitem"
                     onClick={() => {
@@ -1119,6 +1223,18 @@ export function TablePage() {
               >
                 Ping
               </button>
+              {gm && (
+                <button
+                  role="menuitem"
+                  disabled={!clipboard.current.length}
+                  onClick={() => {
+                    pasteTokens();
+                    setContext(null);
+                  }}
+                >
+                  Colar tokens
+                </button>
+              )}
               {gm && (
                 <button
                   role="menuitem"

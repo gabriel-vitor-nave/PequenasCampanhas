@@ -6,6 +6,10 @@ Tabletop em React, TypeScript, Vite e PixiJS, com Supabase Auth, PostgreSQL, Sto
 
 ## Usar a mesa
 
+A mesa funciona em computador e celular. No celular, abre em horizontal mesmo com o aparelho em pé; ao girar o aparelho, acompanha a orientação sem rotacionar login e campanhas. Um dedo move a câmera no espaço vazio ou arrasta tokens autorizados; dois dedos fazem zoom/pan. Toque prolongado abre o menu de contexto. Painéis sobrepostos, rolador recolhível e alvos de toque maiores preservam o espaço do mapa.
+
+O mestre pode criar, preparar e salvar tudo com **zero jogadores**, sem convites nem outros participantes: mapas, cenas privadas/compartilhadas, tokens, desenhos, dados, combate e áudio. Jogadores entram depois e recebem o estado salvo conforme suas permissões. Não é necessário iniciar uma sessão ou esperar alguém conectar.
+
 Abra uma campanha e clique em **Abrir mesa**. O mestre envia o mapa e configura o grid em **Mapa e grid**. Em **Tokens**, crie o token, ajuste imagem, tamanho e vida, e marque seus controladores em **Quem pode mover**. As permissões gerais de desenho e movimentação ficam em **Campanha → Participantes**.
 
 - Mapas JPG/PNG/WebP, posição, tamanho, substituição, bloqueio e grid quadrado/hexagonal com alinhamento, escala, cor e opacidade.
@@ -18,9 +22,9 @@ Abra uma campanha e clique em **Abrir mesa**. O mestre envia o mapa e configura 
 - Realtime, presença, pings, reconciliação após reconexão e revisão de recursos para detectar edições concorrentes.
 - Exportação JSON das cenas, tokens, desenhos, participantes, configuração e últimas 80 rolagens. Inclui metadados dos arquivos, sem incorporar binários. Ainda não há importação/restauração.
 
-Atalhos: **V** selecionar, **H** câmera, **P** lápis, **L** linha, **R** retângulo, **O** círculo, **A** seta, **T** texto, **E** borracha. **Espaço + arrastar** ou botão do meio move a câmera; roda ajusta zoom; **Alt + clique** envia ping. **Shift + clique** seleciona vários tokens; setas movem os autorizados. **Ctrl+C/V**, Delete e **Ctrl+Z/Y** operam sobre os recursos selecionados/desenhos.
+Atalhos: **V** selecionar, **H** câmera, **P** lápis, **L** linha, **R** retângulo, **O** círculo, **A** seta, **T** texto, **E** borracha. **Espaço + arrastar** ou botão do meio move a câmera; roda ajusta zoom; **Alt + clique** envia ping. **Shift + clique** seleciona vários tokens; setas movem os autorizados. Os menus também oferecem copiar/colar por toque. **Ctrl+C/V**, Delete e **Ctrl+Z/Y** operam sobre os recursos selecionados/desenhos.
 
-Imagens: até 10 MB; upload de mapa aceita até 8192 px por lado. Áudios: até 25 MB, MP3/WAV/OGG/WebM/M4A; decodificação depende dos codecs do navegador. Fichas completas D&D 2024, régua, templates, névoa, auras, diário/NPCs e playlists avançadas pertencem às próximas entregas. Não há controles decorativos para elas.
+Imagens: até 10 MB; upload de mapa aceita até 8192 px por lado. SFX usam até 16 canais simultâneos desbloqueados por toque; ao exceder esse número, o canal mais antigo é reutilizado. Áudios: até 25 MB, MP3/WAV/OGG/WebM/M4A; decodificação depende dos codecs do navegador. Fichas completas D&D 2024, régua, templates, névoa, auras, diário/NPCs e playlists avançadas pertencem às próximas entregas. Não há controles decorativos para elas.
 
 ## Desenvolvimento local
 
@@ -64,3 +68,5 @@ O teste `e2e/tabletop.spec.ts` exige `E2E_TABLE_LIVE=1` e roda no projeto deskto
 `.openai/hosting.json` mantém o identificador do Site e a saída estática `dist`. O fluxo sincroniza o mesmo commit com GitHub e a fonte do Sites, empacota `dist`, salva versão e publica. Tokens temporários não são persistidos no Git. As variáveis `VITE_` são substituídas durante o build; variáveis de runtime não alteram um bundle já compilado.
 
 `vercel.json` foi mantido para migração futura. Não há publicação na Vercel nesta etapa.
+
+O teste `e2e/mobile-tabletop.spec.ts` exige `E2E_MOBILE_LIVE=1`. Valida preparação solo antes de criar o primeiro jogador, orientação, gestos, menus, persistência e áudio. `E2E_WEBKIT=1` troca o projeto mobile para WebKit (instale com `pnpm exec playwright install webkit`). No Chromium, os gestos usam eventos nativos de toque via CDP; no WebKit, a integração de pinça usa Pointer Events sintéticos e os controles usam toques do navegador. Isso não substitui testes em aparelhos físicos.

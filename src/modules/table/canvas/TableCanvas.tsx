@@ -22,6 +22,10 @@ import {
   hitToken,
   screenToWorld,
   snapToken,
+  beginPinch,
+  pinchCamera,
+  clientToCanvas,
+  type Pinch,
 } from "./geometry";
 import { useTableUI } from "../store";
 
@@ -40,6 +44,7 @@ type Props = {
   gm: boolean;
   canDraw: boolean;
   canMove: boolean;
+  rotated?: boolean;
   activeToken: string | null;
   onMove: (moves: TokenMove[]) => void;
   onDraw: (drawing: DrawingInput) => void;
@@ -70,6 +75,7 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
       latest = useRef(props),
       interaction = useRef<Interaction | null>(null),
       space = useRef(false),
+      resetInput = useRef<(() => void) | null>(null),
       preview = useRef<Preview>({});
     const [camera, setCameraState] = useState<Camera>({
         x: 80,
@@ -150,6 +156,7 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
       };
     }, []);
     useEffect(() => {
+      resetInput.current?.();
       interaction.current = null;
       preview.current = {};
       if (host.current)
@@ -162,6 +169,9 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
         );
       useTableUI.getState().set({ selection: [], drawingSelection: null });
     }, [props.scene.id]);
+    useEffect(() => {
+      resetInput.current?.();
+    }, [props.rotated]);
     useEffect(() => {
       engine.current?.update({
         scene: props.scene,
@@ -265,6 +275,7 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
       window.addEventListener("keydown", key);
       window.addEventListener("keyup", key);
       const blur = () => {
+        resetInput.current?.();
         space.current = false;
         interaction.current = null;
         preview.current = {};
@@ -280,9 +291,23 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
     useEffect(() => {
       const element = host.current;
       if (!element) return;
+      const touches = new Map<number, Point>();
+      let pinch: Pinch | null = null,
+        navigation = false;
+      let press: ReturnType<typeof setTimeout> | undefined;
+      let touchStart: Point | null = null;
+      let blockContextClick = false;
+      const stopPress = () => {
+        clearTimeout(press);
+        press = undefined;
+      };
       const position = (event: PointerEvent | WheelEvent): Point => {
         const bounds = element.getBoundingClientRect();
-        return [event.clientX - bounds.left, event.clientY - bounds.top];
+        return clientToCanvas(
+          [event.clientX, event.clientY],
+          bounds,
+          latest.current.rotated ?? false,
+        );
       };
       const world = (event: PointerEvent | WheelEvent) =>
         screenToWorld(position(event), cameraRef.current);
@@ -296,7 +321,6 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
         );
         if (hit && canEditDrawing(hit) && !active.ids.has(hit.id)) {
           active.ids.add(hit.id);
-          latest.current.onErase(hit);
         }
       };
       const down = (event: PointerEvent) => {
@@ -304,7 +328,43 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
         const p = latest.current,
           u = uiRef.current,
           point = world(event);
-        element.setPointerCapture(event.pointerId);
+        stopPress();
+        // Synthetic accessibility events have no active native pointer to capture.
+        if (event.isTrusted) element.setPointerCapture(event.pointerId);
+        if (event.pointerType === "touch") {
+          touches.set(event.pointerId, position(event));
+          if (touches.size >= 2) {
+            const points = [...touches.values()];
+            pinch = beginPinch(cameraRef.current, points[0], points[1]);
+            navigation = true;
+            interaction.current = null;
+            preview.current = {};
+            repaint();
+            return;
+          }
+          if (navigation) return;
+          touchStart = position(event);
+          if (u.tool === "select")
+            press = setTimeout(() => {
+              blockContextClick = true;
+              interaction.current = null;
+              preview.current = {};
+              repaint();
+              const token =
+                hitToken(point, latest.current.tokens, latest.current.scene) ??
+                null;
+              if (token)
+                useTableUI
+                  .getState()
+                  .set({ selection: [token.id], drawingSelection: null });
+              latest.current.onContext({
+                x: event.clientX,
+                y: event.clientY,
+                point,
+                token,
+              });
+            }, 550);
+        }
         if (event.button === 1 || u.tool === "pan" || space.current) {
           interaction.current = {
             kind: "pan",
@@ -336,12 +396,14 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
         const token = hitToken(point, p.tokens, p.scene);
         if (token) {
           let ids = u.selection.includes(token.id) ? u.selection : [token.id];
-          if (event.shiftKey)
+          const extend =
+            event.shiftKey || (event.pointerType === "touch" && u.multiSelect);
+          if (extend)
             ids = u.selection.includes(token.id)
               ? u.selection.filter((id) => id !== token.id)
               : [...u.selection, token.id].slice(0, 64);
           u.set({ selection: ids, drawingSelection: null });
-          if (!event.shiftKey && canMove(token))
+          if (!extend && canMove(token))
             interaction.current = {
               kind: "tokens",
               start: point,
@@ -377,9 +439,34 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
           return;
         }
         u.set({ selection: [], drawingSelection: null });
-        interaction.current = { kind: "box", start: point };
+        interaction.current =
+          event.pointerType === "touch" && !u.multiSelect
+            ? { kind: "pan", start: position(event), camera: cameraRef.current }
+            : { kind: "box", start: point };
       };
       const move = (event: PointerEvent) => {
+        if (event.pointerType === "touch") {
+          if (!touches.has(event.pointerId)) return;
+          touches.set(event.pointerId, position(event));
+          if (navigation) {
+            if (pinch && touches.size >= 2) {
+              const points = [...touches.values()];
+              changeCamera(pinchCamera(pinch, points[0], points[1]));
+            }
+            return;
+          }
+          if (
+            touchStart &&
+            Math.hypot(
+              ...([
+                position(event)[0] - touchStart[0],
+                position(event)[1] - touchStart[1],
+              ] as Point),
+            ) < 8
+          )
+            return;
+          stopPress();
+        }
         const active = interaction.current;
         if (!active) return;
         const p = latest.current,
@@ -462,6 +549,23 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
         repaint();
       };
       const up = (event: PointerEvent) => {
+        stopPress();
+        if (event.pointerType === "touch") {
+          touches.delete(event.pointerId);
+          if (navigation) {
+            if (touches.size >= 2) {
+              const points = [...touches.values()];
+              pinch = beginPinch(cameraRef.current, points[0], points[1]);
+            }
+            if (touches.size === 0) {
+              navigation = false;
+              pinch = null;
+              touchStart = null;
+            }
+            return;
+          }
+          touchStart = null;
+        }
         const active = interaction.current;
         if (!active) return;
         const p = latest.current,
@@ -481,6 +585,11 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
         else if (active.kind === "drawing" && view.drawingMove)
           p.onMoveDrawing(active.drawing, view.drawingMove.points);
         else if (active.kind === "map" && view.map) p.onMoveMap(view.map);
+        else if (active.kind === "erase")
+          for (const id of active.ids) {
+            const drawing = p.drawings.find((d) => d.id === id);
+            if (drawing && canEditDrawing(drawing)) p.onErase(drawing);
+          }
         else if (active.kind === "box") {
           const a = active.start;
           u.set({
@@ -538,9 +647,16 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
       };
       const context = (event: MouseEvent) => {
         event.preventDefault();
+        stopPress();
+        if (navigation) return;
+        blockContextClick = true;
         const bounds = element.getBoundingClientRect(),
           point = screenToWorld(
-            [event.clientX - bounds.left, event.clientY - bounds.top],
+            clientToCanvas(
+              [event.clientX, event.clientY],
+              bounds,
+              latest.current.rotated ?? false,
+            ),
             cameraRef.current,
           ),
           p = latest.current;
@@ -552,10 +668,30 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
         });
       };
       const cancel = () => {
+        stopPress();
+        touches.clear();
+        pinch = null;
+        navigation = false;
+        touchStart = null;
         interaction.current = null;
         preview.current = {};
         repaint();
       };
+      // A long press can open a menu directly under the held finger. Its release
+      // must not activate whichever menu item happens to appear at that point.
+      const freshPress = () => {
+        blockContextClick = false;
+      };
+      const contextClick = (event: MouseEvent) => {
+        if (blockContextClick && event.detail > 0) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          blockContextClick = false;
+        }
+      };
+      document.addEventListener("pointerdown", freshPress, true);
+      document.addEventListener("click", contextClick, true);
+      resetInput.current = cancel;
       element.addEventListener("pointerdown", down);
       element.addEventListener("pointermove", move);
       element.addEventListener("pointerup", up);
@@ -563,6 +699,10 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
       element.addEventListener("wheel", wheel, { passive: false });
       element.addEventListener("contextmenu", context);
       return () => {
+        document.removeEventListener("pointerdown", freshPress, true);
+        document.removeEventListener("click", contextClick, true);
+        cancel();
+        resetInput.current = null;
         element.removeEventListener("pointerdown", down);
         element.removeEventListener("pointermove", move);
         element.removeEventListener("pointerup", up);
@@ -577,6 +717,9 @@ export const TableCanvas = forwardRef<CanvasHandle, Props>(
         className={`table-canvas tool-${ui.tool}`}
         role="application"
         aria-label="Mesa virtual"
+        data-camera-x={camera.x}
+        data-camera-y={camera.y}
+        data-camera-scale={camera.scale}
         tabIndex={0}
       >
         <div className="table-zoom-readout">

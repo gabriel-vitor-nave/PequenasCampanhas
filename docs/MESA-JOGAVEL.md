@@ -33,3 +33,15 @@ Fichas completas, régua/templates, névoa, diário/NPCs, biblioteca avançada, 
 ## Limites deste recorte
 
 Desfazer/refazer cobre desenhos nesta sessão do navegador, sem histórico global de edição. Exportação JSON contém as cenas e seus recursos e as últimas 80 rolagens; arquivos binários e restauração ficam para a etapa posterior. A câmera é individual e pings são efêmeros. Áudio exige ativação local; navegador/codec e latência limitam a precisão de reprodução. Não há promessa de sincronização de áudio em nível de amostra.
+
+## Porte móvel e preparação solo — atualização posterior
+
+A instrução posterior inclui celular, sempre em horizontal. A mesa gira sua própria área quando o aparelho está em pé, sem girar login/campanhas. Coordenadas de toque passam pela transformação inversa. Pinça move/amplia a câmera e cancela operações de desenho/arraste pendentes; um dedo move a câmera no espaço vazio e arrasta tokens autorizados. Toque prolongado abre menus sem disparar uma ação ao soltar o dedo. Controles por toque evitam cliques de compatibilidade duplicados, inclusive quando fechar um painel muda o alvo sob o dedo.
+
+Painéis sobrepostos/recolhíveis, alvos de 44 px, rolador recolhível, seleção múltipla, menus de copiar/colar, área segura do aparelho e ajuste ao teclado virtual. O áudio reutiliza elementos desbloqueados no toque e usa ganho Web Audio quando disponível, com até 16 canais de SFX.
+
+O mestre prepara e salva mapas, grid, tokens, desenhos, rolagens, combate, música/SFX e cenas privadas/compartilhadas com zero jogadores na campanha e sem convites. Não há dependência de presença ou de início formal de sessão. O primeiro jogador pode entrar depois e recebe o estado persistido permitido.
+
+Validação final: 50 testes unitários/interface/banco aprovados; regressão desktop com três verificações aprovadas, incluindo dois navegadores com música/SFX; aceitação móvel aprovada em Chromium e WebKit. O cenário móvel cria inicialmente só o mestre, verifica ausência de jogadores/convites, configura e recarrega a mesa e somente então cria/convida o jogador. Capturas de orientação, painéis, menus e rolador revisadas.
+
+Limite de verificação: os navegadores móveis foram emulados. No Chromium, pinça e arraste usam eventos nativos de toque via CDP. No WebKit, esses gestos são enviados como Pointer Events sintéticos, enquanto os controles recebem toques do navegador. O WebKit instalado neste Windows não expõe AudioContext e devolveu NotSupportedError ao reproduzir WAV; nele foram validados interface e comandos persistidos, sem fingir reprodução. Reprodução/sincronização passou no Chromium. Áudio e teclado em Safari/iPhone físico ainda precisam de validação em aparelho real.

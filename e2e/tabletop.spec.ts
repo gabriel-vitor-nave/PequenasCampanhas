@@ -132,7 +132,7 @@ test("mestre e jogador usam a mesma mesa e recuperam o estado salvo", async ({
   await login(gm, fixture.gm);
   await login(player, fixture.player);
   await expect(gm.locator(".table-presence summary")).toContainText(
-    "2 conectado",
+    "1 jogador",
     { timeout: 10_000 },
   );
 
@@ -153,13 +153,11 @@ test("mestre e jogador usam a mesma mesa e recuperam o estado salvo", async ({
     ctx.fillRect(450, 400, 30, 200);
     return canvas.toDataURL("image/png").split(",")[1];
   });
-  await gm
-    .getByLabel("Enviar primeiro mapa")
-    .setInputFiles({
-      name: "mapa-teste.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(png, "base64"),
-    });
+  await gm.getByLabel("Enviar primeiro mapa").setInputFiles({
+    name: "mapa-teste.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(png, "base64"),
+  });
   await expect(gm.getByLabel("Enviar primeiro mapa")).toHaveCount(0, {
     timeout: 20_000,
   });
@@ -237,15 +235,13 @@ test("mestre e jogador usam a mesma mesa e recuperam o estado salvo", async ({
       .data,
   ).toEqual([]);
   const hiddenId = randomUUID();
-  const hidden = await gmApi
-    .from("table_tokens")
-    .insert({
-      id: hiddenId,
-      campaign_id: campaign,
-      scene_id: hero.scene_id,
-      name: "Segredo GM",
-      visible: false,
-    });
+  const hidden = await gmApi.from("table_tokens").insert({
+    id: hiddenId,
+    campaign_id: campaign,
+    scene_id: hero.scene_id,
+    name: "Segredo GM",
+    visible: false,
+  });
   expect(hidden.error).toBeNull();
   const deniedMove = await playerApi.rpc("move_table_tokens", {
     p_scene_id: hero.scene_id,
@@ -365,13 +361,11 @@ test("mestre e jogador usam a mesma mesa e recuperam o estado salvo", async ({
       .getByRole("button", { name: "Ativar áudio", exact: true })
       .click();
   await gm.getByRole("button", { name: "Áudio", exact: true }).click();
-  await gm
-    .getByLabel("Enviar áudio", { exact: true })
-    .setInputFiles({
-      name: "som-teste.wav",
-      mimeType: "audio/wav",
-      buffer: wav,
-    });
+  await gm.getByLabel("Enviar áudio", { exact: true }).setInputFiles({
+    name: "som-teste.wav",
+    mimeType: "audio/wav",
+    buffer: wav,
+  });
   await expect(gm.locator(".audio-library")).toContainText("som-teste.wav", {
     timeout: 20_000,
   });

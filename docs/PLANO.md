@@ -1,6 +1,6 @@
 # Ordem de implementação
 
-As [diretrizes recebidas em 9/11/2026](DIRETRIZES.md) substituem a ordem anterior. Foco em sessões reais em computadores. Login por usuário/senha. Fonte no GitHub e publicação no ChatGPT Sites.
+As [diretrizes recebidas em 9/11/2026](DIRETRIZES.md) substituem a ordem anterior. Foco em sessões reais em computadores e celulares; o porte mobile foi solicitado posteriormente. Login por usuário/senha. Fonte no GitHub e publicação no ChatGPT Sites.
 
 ## Fundação preservada
 
@@ -9,6 +9,8 @@ Contas, perfil, campanhas, convites por usuário, participantes, permissões e h
 ## Primeira entrega — mesa jogável
 
 Mesa PixiJS em rota própria; upload de mapas, grid, câmera local, cenas, tokens autorizados, desenhos compartilhados/privados, dados oficiais no servidor, combate básico, Realtime, persistência e áudio básico. Interface compacta em grafite/cinza/azul, sem banners promocionais. Veja [arquitetura e aceitação](MESA-JOGAVEL.md).
+
+A mesa mobile funciona em horizontal, com gestos, menus por toque prolongado e painéis sobrepostos. Preparação e persistência independem da existência ou presença de jogadores na campanha.
 
 ## Segunda entrega
 

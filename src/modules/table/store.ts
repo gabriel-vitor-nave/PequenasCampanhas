@@ -13,6 +13,7 @@ type TableUI = {
   panelWidth: number;
   selection: string[];
   drawingSelection: string | null;
+  multiSelect: boolean;
   color: string;
   width: number;
   opacity: number;
@@ -28,6 +29,7 @@ export const useTableUI = create<TableUI>((set) => ({
   panelWidth: 320,
   selection: [],
   drawingSelection: null,
+  multiSelect: false,
   color: "#86b1f2",
   width: 3,
   opacity: 1,

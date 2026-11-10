@@ -2,10 +2,39 @@
 import { describe, expect, it, vi } from "vitest";
 import { inspectTableFile } from "../../../shared/table-files";
 import { createAssetHandler } from "../../../supabase/functions/table-assets/handler";
-import { screenToWorld, snapPoint, snapToken } from "./canvas/geometry";
+import {
+  screenToWorld,
+  snapPoint,
+  snapToken,
+  clientToCanvas,
+  beginPinch,
+  pinchCamera,
+} from "./canvas/geometry";
 import type { Scene } from "./types";
 
 describe("camera and grid coordinates", () => {
+  it("maps physical touch coordinates into a clockwise landscape canvas", () => {
+    expect(
+      clientToCanvas([300, 180], { left: 40, top: 80, right: 360 }, true),
+    ).toEqual([100, 60]);
+    expect(
+      clientToCanvas([300, 180], { left: 40, top: 80, right: 360 }, false),
+    ).toEqual([260, 100]);
+  });
+  it("keeps the world point between two fingers anchored while pinching and panning", () => {
+    const pinch = beginPinch(
+      { x: 20, y: 30, scale: 1 },
+      [100, 100],
+      [200, 100],
+    );
+    const camera = pinchCamera(pinch, [80, 130], [280, 130]);
+    expect(camera.scale).toBe(2);
+    expect(screenToWorld([180, 130], camera)).toEqual(
+      screenToWorld([150, 100], pinch.camera),
+    );
+    expect(pinchCamera(pinch, [-10000, 0], [10000, 0]).scale).toBe(4);
+    expect(pinchCamera(pinch, [100, 100], [100, 100]).scale).toBe(0.1);
+  });
   const scene = {
     grid_type: "square",
     grid_size: 50,
