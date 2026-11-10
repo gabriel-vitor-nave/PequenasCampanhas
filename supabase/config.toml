@@ -27,8 +27,8 @@ port = 54324
 
 [auth]
 enabled = true
-site_url = "http://127.0.0.1:5173"
-additional_redirect_urls = ["http://127.0.0.1:5173/auth/callback", "http://127.0.0.1:5173/auth/nova-senha"]
+site_url = "https://pequenas-campanhas.ripplingantelope.chatgpt.site"
+additional_redirect_urls = ["https://pequenas-campanhas.ripplingantelope.chatgpt.site/auth/callback", "https://pequenas-campanhas.ripplingantelope.chatgpt.site/auth/nova-senha", "http://127.0.0.1:5173/auth/callback", "http://127.0.0.1:5173/auth/nova-senha"]
 enable_signup = true
 minimum_password_length = 12
 

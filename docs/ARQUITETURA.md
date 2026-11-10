@@ -6,6 +6,8 @@ React compõe páginas e controles. React Router protege as rotas com uma sessã
 
 O frontend nunca é autoridade para permissões. Todas as tabelas têm RLS e o papel `anon` não tem acesso. Colunas protegidas, como proprietário e papel, não possuem concessão de escrita para `authenticated`. As RPCs privilegiadas usam `SECURITY DEFINER`, `search_path` vazio, nomes qualificados e identidade derivada de `auth.uid()`. Não recebem um identificador arbitrário de usuário como identidade do solicitante.
 
+Após a revisão hospedada, as implementações privilegiadas foram movidas para `private`, com entradas `SECURITY INVOKER` em `public`. O schema `private` não é exposto pela Data API. A autorização permanece dentro de cada implementação; a revisão de segurança hospedada ficou sem alertas.
+
 ## Modelo implementado
 
 | Entidade | Responsabilidade | Relações |

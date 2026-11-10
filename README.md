@@ -1,6 +1,6 @@
 # Pequenas Campanhas
 
-Plataforma de RPG de mesa virtual em React, TypeScript e Vite. Desenvolvimento por fases, começando por contas, campanhas e permissões. O projeto não contém campanhas, usuários ou persistência fictícios.
+Plataforma de RPG de mesa virtual em React, TypeScript e Vite. Desenvolvimento por fases, começando por contas, campanhas e permissões. O projeto não contém campanhas, usuários ou persistência fictícios. Backend conectado ao projeto Supabase `hpniaafplkaytvszcmde`, na organização Kbum, região São Paulo.
 
 **Hospedagem atual: ChatGPT Sites.** O código completo fica neste repositório. A configuração da Vercel foi mantida para uma migração posterior, conforme solicitado. A mesa PixiJS e os sistemas de RPG são entregas seguintes; consulte [o plano](docs/PLANO.md).
 
@@ -15,7 +15,7 @@ Plataforma de RPG de mesa virtual em React, TypeScript e Vite. Desenvolvimento p
 - RLS, RPCs com autorização no servidor, histórico de atividades e invalidação de consultas por Supabase Realtime.
 - Sem Supabase configurado, a aplicação exibe uma tela de configuração; nenhuma operação é apresentada como salva.
 
-**Ainda depende de configuração externa:** projeto Supabase, migration aplicada, variáveis públicas e redirecionamentos de autenticação. Entrega implementada e validada localmente; confirmação de e-mail, autenticação hospedada e sincronização entre navegadores precisam de uma validação integrada nesse projeto.
+**Backend conectado:** projeto criado, migrations aplicadas, RLS e publicação Realtime verificadas. O Site agora abre o login por senha. A confirmação de e-mail permanece habilitada; a configuração de retornos de confirmação/recuperação e SMTP foi adiada pelo usuário para priorizar o tabletop. Esses fluxos de e-mail ainda não foram validados. Detalhes em [conexão do Supabase](docs/CONEXAO-SUPABASE.md).
 
 ## Executar localmente
 
@@ -23,11 +23,10 @@ Requisitos: Node.js 22.12+ (Node 24 recomendado), pnpm 11.25 e Git. Se usar Core
 
 ```sh
 pnpm install --frozen-lockfile
-cp .env.example .env.local
 pnpm dev
 ```
 
-No PowerShell, use `Copy-Item .env.example .env.local` para copiar. Preencha:
+O clone já utiliza a conexão pública em `src/lib/deployment.ts`, sem credenciais administrativas. Para usar outro backend, copie `.env.example` para `.env.local` (PowerShell: `Copy-Item .env.example .env.local`) e preencha:
 
 ```dotenv
 VITE_SUPABASE_URL=https://SEU_PROJETO.supabase.co
@@ -40,13 +39,15 @@ O servidor abre em `http://127.0.0.1:5173`. Sem configuração, a tela inicial m
 
 ## Configurar o Supabase
 
+O projeto hospedado atual já foi criado e migrado. Para uma instância nova:
+
 1. Crie um projeto Supabase.
 2. Aplique **uma única vez**, na ordem, os arquivos de `supabase/migrations` pelo SQL Editor, ou use a CLI:
 
    ```sh
    supabase login
    supabase link --project-ref SEU_PROJECT_REF
-   supabase db push
+   supabase db push --remote=SEU_PROJECT_REF
    ```
 
 3. Em Auth, habilite e-mail/senha, confirmação de e-mail e senha mínima de 12 caracteres. Configure SMTP próprio antes de liberar para usuários reais.
@@ -85,7 +86,9 @@ pnpm test:e2e
 
 `pnpm test` inclui testes React Testing Library, validação e a migration real executada em PostgreSQL embarcado (PGlite), com papéis distintos, RLS e RPCs. Isso não substitui testes de integração dos serviços gerenciados do Supabase. `pnpm test:db` executa apenas a suíte de banco.
 
-Os testes E2E servem o último `dist` com `vite preview`: **rode o build antes**. Eles verificam a tela sem backend configurado, rotas profundas, ausência de erros JavaScript e largura mobile. Use um build sem variáveis para essa suíte. Para usar o Edge instalado em vez de baixar Chromium, defina `PLAYWRIGHT_CHANNEL=msedge` no terminal. No PowerShell: `$env:PLAYWRIGHT_CHANNEL = 'msedge'`.
+Os testes E2E servem o último `dist` com `vite preview`: **rode o build antes**. Eles verificam o login, proteção de rotas profundas, ausência de erros JavaScript e largura mobile, sem criar contas nem enviar e-mails. Para usar o Edge instalado em vez de baixar Chromium, defina `PLAYWRIGHT_CHANNEL=msedge` no terminal. No PowerShell: `$env:PLAYWRIGHT_CHANNEL = 'msedge'`.
+
+`supabase/checks/hosted_smoke.sql` também passou no banco hospedado, validando operações e isolamento de papéis em uma transação revertida. Nenhum usuário ou campanha de teste permaneceu no banco. A CLI Supabase v3 usa alvo local por padrão: declare `--remote=PROJECT_REF` nas operações remotas e revise o diff.
 
 Com Supabase CLI + Docker, `pnpm test:supabase` também executa os testes pgTAP em `supabase/tests`. A CI instala dependências, testa, compila e executa Playwright.
 

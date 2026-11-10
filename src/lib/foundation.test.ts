@@ -1,7 +1,7 @@
 // @vitest-environment node
 // Real PostgreSQL in WASM: no mocked RLS, tables or stored procedures.
 // Supabase-managed auth and Realtime still require live integration verification.
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { PGlite } from '@electric-sql/pglite'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
@@ -46,7 +46,10 @@ describe('foundation migration and authorization', () => {
       grant execute on function auth.uid() to anon, authenticated;
       create publication supabase_realtime;
     `)
-    await db.exec(readFileSync(new URL('../../supabase/migrations/202611090001_foundation.sql', import.meta.url), 'utf8'))
+    const migrations = new URL('../../supabase/migrations/', import.meta.url)
+    for (const file of readdirSync(migrations).filter(file => file.endsWith('.sql')).sort()) {
+      await db.exec(readFileSync(new URL(file, migrations), 'utf8'))
+    }
     await db.query("insert into auth.users(id,email,email_confirmed_at) values ($1,'gm@example.com',now()),($2,'player@example.com',now()),($3,'stranger@example.com',now())", [gm, player, stranger])
   }, 60_000)
   beforeEach(async () => {
